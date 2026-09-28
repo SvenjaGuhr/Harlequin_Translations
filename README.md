@@ -1,4 +1,4 @@
-# Harlequin_Translations
+# Harlequin Translations
 
 # Harlequin translations: linking English category romances to their French, German and Polish editions
 
