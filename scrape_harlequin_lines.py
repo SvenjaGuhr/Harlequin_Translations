@@ -7,7 +7,14 @@ Lines (FictionDB series pages, 200 books per page):
   presents           Harlequin Presents                    ~4,000+
   romance            Harlequin Romance                     ~4,000+
   desire             Silhouette Desire                     ~2,000+
-  special_edition    Silhouette / Harlequin Special Edition ~2,800+
+  special_edition    Silhouette / Harlequin Special Edition ~3,200
+  intrigue           Harlequin Intrigue                    ~2,450
+  superromance       Harlequin Superromance                ~2,150
+  historical         Harlequin Historical
+  temptation         Harlequin Temptation
+  blaze              Harlequin Blaze
+  silhouette_romance Silhouette Romance
+  intimate_moments   Silhouette Intimate Moments / Romantic Suspense
 
 A book that appears in several lines is kept ONCE (same FictionDB book_id); the
 columns `line` (first line it was found in) and `all_lines` ("Harlequin Presents #12;
@@ -45,7 +52,20 @@ LINES = {
     "romance":          ("Harlequin Romance",          f"{BASE}/series/harlequin-romance~14065.htm"),
     "desire":           ("Silhouette Desire",          f"{BASE}/series/silhouette-desire~14137.htm"),
     "special_edition":  ("Special Edition",            f"{BASE}/series/silhouette-special-edition~14152.htm"),
+    # additional lines (added for books that translations point to outside the first five)
+    "intrigue":         ("Harlequin Intrigue",         f"{BASE}/series/harlequin-intrigue~14050.htm"),
+    "superromance":     ("Harlequin Superromance",     f"{BASE}/series/harlequin-superromance~14068.htm"),
+    "historical":       ("Harlequin Historical",       f"{BASE}/series/harlequin-historical~14045.htm"),
+    "temptation":       ("Harlequin Temptation",       f"{BASE}/series/harlequin-temptation~14072.htm"),
+    "blaze":            ("Harlequin Blaze",            f"{BASE}/series/harlequin-blaze~14033.htm"),
+    "silhouette_romance": ("Silhouette Romance",       f"{BASE}/series/silhouette-romance~14150.htm"),
+    "intimate_moments": ("Silhouette Intimate Moments", f"{BASE}/series/silhouette-intimate-moments~14147.htm"),
 }
+# words the page heading must contain (FictionDB resolves the numeric ID, not the name in the address)
+EXPECT = {"american_romance": "american", "presents": "presents", "romance": "romance", "desire": "desire",
+          "special_edition": "special edition", "intrigue": "intrigue", "superromance": "super",
+          "historical": "historical", "temptation": "temptation", "blaze": "blaze",
+          "silhouette_romance": "silhouette romance", "intimate_moments": "intimate moments"}
 
 HEADERS = {
     "User-Agent": (
@@ -191,9 +211,14 @@ def parse_series_page(html: str) -> list[dict]:
     return rows
 
 
-def scrape_series(fetcher: Fetcher, line_name: str, series_url: str) -> list[dict]:
+def scrape_series(fetcher: Fetcher, line_name: str, series_url: str, expect: str = "") -> list[dict]:
     first = fetcher.get(page_url(series_url, 1))
-    n_pages = total_pages(BeautifulSoup(first, "html.parser"))
+    soup = BeautifulSoup(first, "html.parser")
+    heading = " ".join(t.get_text(" ", strip=True) for t in soup.find_all(["title", "h1"])).lower()
+    if expect and expect not in re.sub(r"\s+", " ", heading):
+        print(f"! {line_name}: page heading does not match ('{heading[:80]}') - line skipped, check the URL")
+        return []
+    n_pages = total_pages(soup)
     print(f"{line_name}: {n_pages} page(s)")
 
     books, seen = [], set()
@@ -338,7 +363,7 @@ def main():
     books, by_id, raw_numbers = [], {}, []
     for key in args.lines:
         name, url = LINES[key]
-        for b in scrape_series(fetcher, name, url):
+        for b in scrape_series(fetcher, name, url, EXPECT.get(key, "")):
             if b["series_number"]:
                 raw_numbers.append((name, b["series_number"]))   # before de-duplication
             tag = f"{name} #{b['series_number']}" if b["series_number"] else name

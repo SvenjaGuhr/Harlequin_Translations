@@ -46,7 +46,9 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (research script; translation metadata)"}
 
 EXTRA_COLS = ["language_letter", "authors", "original_title", "translated_title", "pub_date", "publisher",
               "place", "translators", "series", "isbn", "format", "copyright", "original_series",
-              "first_edition", "first_edition_year", "source", "source_record_id", "url"]
+              "first_edition", "first_edition_year", "source", "source_record_id", "url", "blurb"]
+PRODUCT_COLS = ["handle", "title", "authors", "series", "pub_date", "isbn", "format", "n_stories_with_original",
+                "original_titles", "blurb", "url"]
 
 
 class Fetcher:
@@ -203,6 +205,18 @@ def parse_product_page(html):
     return stories, {"pub_date": date.group(1) if date else "", "isbn": isbn.group(1) if isbn else ""}
 
 
+def blurb_of(product, html):
+    """German back-cover text: the shop's product description (body_html), else the page's meta description."""
+    text = ""
+    if product.get("body_html"):
+        text = BeautifulSoup(product["body_html"], "html.parser").get_text(" ")
+    if not text.strip() and html:
+        soup = BeautifulSoup(html, "html.parser")
+        tag = soup.find("meta", attrs={"property": "og:description"}) or soup.find("meta", attrs={"name": "description"})
+        text = tag.get("content", "") if tag else ""
+    return re.sub(r"\s+", " ", text).strip()[:4000]
+
+
 def series_of(title, tags):
     m = re.match(r"^(.*?)\s+(?:Band|Bd\.|Nr\.)\s*(\d+)", title or "", re.I)
     if m:
@@ -248,10 +262,12 @@ def main():
             kept.append((p, tags, list(dict.fromkeys(hits))))
     print(f"{n_total} products in the shop, {len(kept)} tagged with a series author")
 
-    rows, no_impressum = [], 0
+    rows, products, no_impressum = [], [], 0
     for i, (p, tags, hits) in enumerate(kept, 1):
         url = f"{BASE}/products/{p['handle']}"
-        stories, info = parse_product_page(f.get(url))
+        html = f.get(url)
+        stories, info = parse_product_page(html)
+        blurb = blurb_of(p, html)
         if not stories:
             no_impressum += 1
         isbn = info["isbn"] or (ISBN_RE.search(p["handle"]).group(1) if ISBN_RE.search(p["handle"]) else "")
@@ -280,7 +296,15 @@ def main():
                 "source": "CORA",
                 "source_record_id": f"cora:{p['handle']}",
                 "url": url,
+                "blurb": blurb,
             })
+        # every product, also those WITHOUT an original title (candidates for later name matching)
+        products.append({
+            "handle": p["handle"], "title": p.get("title", ""), "authors": "; ".join(hits),
+            "series": series_of(p.get("title", ""), tags), "pub_date": pub_date, "isbn": isbn,
+            "format": p.get("vendor", "") or p.get("product_type", ""), "n_stories_with_original": len(stories),
+            "original_titles": " | ".join(x["original_title"] for x in stories), "blurb": blurb, "url": url,
+        })
         if i % 50 == 0 or i == len(kept):
             print(f"  [{i}/{len(kept)}] product pages read, {len(rows)} stories so far")
 
@@ -288,7 +312,14 @@ def main():
         w = csv.DictWriter(fh, fieldnames=EXTRA_COLS)
         w.writeheader()
         w.writerows(rows)
-    print(f"\n{len(rows)} stories from {len(kept)} products -> {args.output}"
+    products_path = str(Path(args.output).with_name(Path(args.output).stem + "_products.csv"))
+    with open(products_path, "w", newline="", encoding="utf-8-sig") as fh:
+        w = csv.DictWriter(fh, fieldnames=PRODUCT_COLS)
+        w.writeheader()
+        w.writerows(products)
+    with_blurb = sum(1 for x in products if x["blurb"])
+    print(f"\nAll {len(products)} products with blurbs ({with_blurb} non-empty) -> {products_path}")
+    print(f"{len(rows)} stories from {len(kept)} products -> {args.output}"
           f"  ({no_impressum} product pages had no Originaltitel block)")
     print(f"Next: python find_translations.py {args.input} --extra {args.output}")
 
