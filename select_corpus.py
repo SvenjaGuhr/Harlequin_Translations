@@ -8,9 +8,11 @@ A book is usable when it has a French, a German AND a Polish edition. Two levels
   strict   For each language there is at least one edition that
              - contains only this novel (edition_type = single, not an anthology),
              - was matched with an exact original title (match_score >= 0.99) or by hand,
+             and the original title comes from the record itself (not from name matching),
            and the English original comes from FictionDB (exact date and line known).
   relaxed  Any matched edition counts (anthologies too, fuzzy title matches above the
-           matching threshold), and the original may come from Open Library.
+           matching threshold, character-name matches from name_match.py), and the original
+           may come from Open Library.
 
 For both levels the script also counts books where every chosen edition names its translator.
 
@@ -68,7 +70,10 @@ def main():
     t["single"] = t["edition_type"] != "anthology"
     t["has_translator"] = t["translators"].str.strip() != ""
     t["year"] = pd.to_numeric(t["pub_year"], errors="coerce")
-    t["strict_ok"] = t["exact"] & t["single"]
+    t["name_match"] = t["source"].str.contains("name match", case=False, na=False)
+    # strict: catalogue/publisher evidence only; character-name matches (98 % precision,
+    # mostly e-book products) count at the relaxed level
+    t["strict_ok"] = t["exact"] & t["single"] & ~t["name_match"]
     t["strict_tr_ok"] = t["strict_ok"] & t["has_translator"]
 
     # per book and language: is there any edition / a strict edition / one with translator?
