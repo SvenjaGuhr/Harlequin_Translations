@@ -59,8 +59,10 @@ flowchart LR
 | `resolve_originals.py` | Looks up English originals that are not in the scraped lines on Open Library and adds them if they are Harlequin-family books. |
 | `name_match.py` | Links CORA products **without** an original title to their English book through the characters' names in the German blurb and the English description, with a built-in self-test. |
 | `select_corpus.py` | Filters books available in all three languages (strict / relaxed) and draws a stratified sample for the study, with one edition per language to acquire. |
+| `digitisation_tracker.ipynb` | Turns `core_sample.csv` into `digitisation_tracker.xlsx` (one row per volume, status columns for ordered / received / scanned / OCR checked, progress overview, reserve list), writes shopping lists per language, and explores the sample with figures. Re-running keeps everything entered in the spreadsheet. |
 | `analysis.ipynb` | Analysis and figures: corpus overview, coverage per language and line, translation lag, publishers, translators, quality checks, shortlist of books available in several languages. |
 | `experiments/anchor_candidates.py` | Documented **negative result**: an attempt to link records without original title via series order (see below). Not part of the pipeline. |
+| `docs/img/` | Figures shown in this README |
 | `requirements.txt`, `.gitignore` | Dependencies; keeps caches and data files out of the repository. |
 
 All scripts must stay in the same folder (they import from `find_translations.py`). Run them from
@@ -275,6 +277,14 @@ python select_corpus.py --translators         # only books whose translators are
 Outputs `usable_books.csv` (every book available in all three languages, marked `strict` or
 `relaxed`) and `core_sample.csv` (the sample, with title, year, ISBN, series and translator of one
 edition per language). See [Corpus selection](#corpus-selection).
+
+### Step 11: Digitisation tracker
+
+Open `digitisation_tracker.ipynb`, set `DATA_DIR`, **Run All**. It writes
+`digitisation_tracker.xlsx`, `shopping_lists/shopping_<language>.csv`, `order_first.csv` (books with
+only one edition in every language) and figures to `figures_sample/`. Fill in the yellow columns
+of the spreadsheet as you work; re-running the notebook rebuilds the file, keeps your entries
+(the previous file is kept as a dated backup) and updates the progress figures.
 
 ---
 
@@ -497,6 +507,30 @@ sample); `--balanced` spreads the sample as evenly across lines as availability 
 In the balanced sample the smaller lines contribute every strict book they have.
 American Romance has no strict book in all three languages.
 
+![The 250-book balanced sample by line and decade of the English edition](docs/img/sample_line_decade.png)
+
+The figures in this section come from `digitisation_tracker.ipynb` (step 11) run on the balanced sample.
+
+**Translators.** The Polish national bibliography names the translator of every chosen edition,
+the DNB most; the French records are the gap (see *Known limitations*). Missing names are taken
+from the imprint page during digitisation (column `translator_imprint` in the tracker).
+
+![Translator names known from the catalogues, per language](docs/img/sample_translators.png)
+
+**Which edition was chosen.** For each book and language the sample lists one edition to acquire,
+preferring a single-novel edition that names its translator. That is often a later reissue
+rather than the first translation, especially for German (CORA reprints), so the lag below
+describes the *chosen* editions, not the translation market:
+
+![Years between the English edition and the chosen translation](docs/img/sample_translation_lag.png)
+
+![English publication year against the year of the chosen translation](docs/img/sample_years_scatter.png)
+
+**Availability.** Most books exist in only one edition per language; books with a single edition
+in all three languages are listed in `order_first.csv`.
+
+![Number of editions per book and language](docs/img/sample_editions_per_book.png)
+
 ---
 
 ## Known limitations
@@ -525,7 +559,8 @@ American Romance has no strict book in all three languages.
   translator**. Share of harvested French records naming a translator: 1980s 4 %, 1990s 5 %,
   **2000s 0 %** (4 of 6,163), 2010s 13 %, 2020s 27 %. Among the 383 strict books, the translator
   is named for 42 % of French, 84 % of German and 100 % of Polish editions. Missing translators
-  must be taken from the imprint page of the printed book.
+  must be taken from the imprint page of the printed book (in the balanced sample: French 35 %,
+  German 78 %, Polish 100 % named; see the figure under *Corpus selection*).
 - **CORA original titles in anthologies** are sometimes incomplete (fewer originals than stories).
 - **Transediting.** Translated titles are routinely rewritten and cannot be used to identify the
   original; the pipeline never matches on the translated title.
