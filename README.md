@@ -1,6 +1,6 @@
 # Harlequin Translations
 
-# Harlequin translations: linking English category romances to their French, German and Polish editions
+## Linking English category romances to their French, German and Polish editions
 
 A reproducible pipeline that builds a metadata table of English-language Harlequin/Silhouette
 category romances and links each book to its **French, German and Polish translations**, with
@@ -14,15 +14,17 @@ identifies the English original of each one.
 
 ```mermaid
 flowchart LR
-    A[FictionDB<br/>5 Harlequin lines] -->|scrape_harlequin_lines.py| E[(English books<br/>harlequin_lines.csv)]
+    A[FictionDB<br/>12 Harlequin lines] -->|scrape_harlequin_lines.py| E[(English books<br/>harlequin_lines.csv)]
     B[National libraries<br/>DNB · BnF · BN] -->|harvest_by_publisher.py| H[(harvest_F/G/P.csv)]
-    C[CORA shop<br/>German publisher] -->|collect_cora.py| K[(cora_*.csv)]
+    C[CORA shop<br/>German publisher] -->|collect_cora.py| K[(cora_all.csv<br/>cora_all_products.csv)]
+    K -->|name_match.py<br/>character names| M[(name_match_extra.csv)]
     D[UNESCO<br/>Index Translationum] -->|unesco_to_extra.py| U[(unesco_all.csv)]
-    E & H & K & U -->|find_translations.py| T[(translations_all.csv<br/>+ merged table<br/>+ review files)]
+    E & H & K & U & M -->|find_translations.py| T[(translations_all.csv<br/>+ merged table<br/>+ review files)]
     T -->|originals_to_resolve.csv| R[Open Library]
     R -->|resolve_originals.py| X[(english_additions.csv)]
     X -->|second pass| T
-    T --> N[analysis.ipynb<br/>figures + shortlist]
+    T --> N[analysis.ipynb<br/>figures]
+    T -->|select_corpus.py| S[(usable_books.csv<br/>core_sample.csv)]
 ```
 
 ---
@@ -35,11 +37,13 @@ flowchart LR
 4. [The pipeline step by step](#the-pipeline-step-by-step)
 5. [How matching works](#how-matching-works)
 6. [Output files](#output-files)
-7. [Results of the September 2026 run](#results-of-the-september-2026-run)
-8. [Known limitations](#known-limitations)
-9. [Negative result: linking by series order](#negative-result-linking-by-series-order)
-10. [Data sources and responsible use](#data-sources-and-responsible-use)
-11. [Development history](#development-history)
+7. [Results of the October 2026 run](#results-of-the-october-2026-run)
+8. [Linking by character names](#linking-by-character-names)
+9. [Corpus selection](#corpus-selection)
+10. [Known limitations](#known-limitations)
+11. [Negative result: linking by series order](#negative-result-linking-by-series-order)
+12. [Data sources and responsible use](#data-sources-and-responsible-use)
+13. [Development history](#development-history)
 
 ---
 
@@ -47,12 +51,14 @@ flowchart LR
 
 | File | Purpose |
 |---|---|
-| `scrape_harlequin_lines.py` | English side: scrapes the complete lists of Harlequin American Romance, Harlequin Presents, Harlequin Romance, Silhouette Desire and Special Edition from FictionDB (optionally each book's detail page). |
+| `scrape_harlequin_lines.py` | English side: scrapes the complete lists of twelve Harlequin/Silhouette lines from FictionDB (optionally each book's detail page, incl. the description). |
 | `harvest_by_publisher.py` | Harvests all Harlequin translations from the German (DNB), French (BnF) and Polish (BN) national libraries by **publisher**. |
-| `collect_cora.py` | Collects German editions from the CORA Verlag shop (the German Harlequin publisher), whose product pages name original title and translator for every story. |
+| `collect_cora.py` | Collects German editions from the CORA Verlag shop (the German Harlequin publisher), whose product pages name original title and translator for every story; also saves every product's German blurb. |
 | `unesco_to_extra.py` | Converts the open UNESCO *Index Translationum* sample into the pipeline's extra-source format. |
 | `find_translations.py` | **Core.** Matches translations to English books, assigns edition IDs, writes the translation tables, the review files and the list of unresolved originals. Also holds the shared parsing/matching functions imported by the other scripts. |
 | `resolve_originals.py` | Looks up English originals that are not in the scraped lines on Open Library and adds them if they are Harlequin-family books. |
+| `name_match.py` | Links CORA products **without** an original title to their English book through the characters' names in the German blurb and the English description, with a built-in self-test. |
+| `select_corpus.py` | Filters books available in all three languages (strict / relaxed) and draws a stratified sample for the study, with one edition per language to acquire. |
 | `analysis.ipynb` | Analysis and figures: corpus overview, coverage per language and line, translation lag, publishers, translators, quality checks, shortlist of books available in several languages. |
 | `experiments/anchor_candidates.py` | Documented **negative result**: an attempt to link records without original title via series order (see below). Not part of the pipeline. |
 | `requirements.txt`, `.gitignore` | Dependencies; keeps caches and data files out of the repository. |
@@ -101,8 +107,8 @@ after a code change only re-parses the cached pages. On macOS, prefix long runs 
 ### Step 1: English books (FictionDB)
 
 ```bash
-python scrape_harlequin_lines.py                    # all five lines, list pages only (~5 min)
-python scrape_harlequin_lines.py --details          # + every book page: rating, ISBN, pages, description (~7 h)
+python scrape_harlequin_lines.py                    # all twelve lines, list pages only (~10 min)
+python scrape_harlequin_lines.py --details          # + every book page: rating, ISBN, pages, description (~17 h)
 python scrape_harlequin_lines.py --lines presents desire   # a subset
 ```
 
@@ -113,6 +119,17 @@ python scrape_harlequin_lines.py --lines presents desire   # a subset
 | Harlequin Romance | 5,031 |
 | Silhouette Desire | 3,001 |
 | Special Edition (Silhouette/Harlequin) | 3,200 |
+| Harlequin Intrigue | 2,452 |
+| Harlequin Superromance | 2,155 |
+| Harlequin Historical, Harlequin Temptation, Harlequin Blaze, Silhouette Romance, Silhouette Intimate Moments / Romantic Suspense | together ≈ 8,400 |
+| **All twelve lines (books listed in several lines counted once)** | **30,500** |
+
+All twelve lines are scraped by default; choose with `--lines` (e.g. `--lines presents desire intrigue`).
+With `--details` the full run takes about 17 h without a cache.
+The scraper checks that each page's heading matches the expected line and skips a line otherwise
+(FictionDB resolves the numeric series ID, not the name in the address). Books from added lines
+no longer need to be resolved via Open Library: after re-running steps 5–7 they are linked with
+FictionDB dates, series numbers and line names.
 
 A book listed in several lines is kept once; `line` is the first line it was found in, `all_lines`
 lists every membership (`"Silhouette Desire #812; Harlequin Presents #1590"`).
@@ -157,8 +174,10 @@ in der Reihe: AMERICAN ROMANCE | © Deutsche Erstausgabe in der Reihe: BIANCA | 
 
 The collector extracts original title, translator, the original series (`original_series`) and the
 **first German edition** (`first_edition`, `first_edition_year`), which e-book reissues state
-explicitly. Author tags are matched tolerantly (a typo such as "Cathy Gillan Thacker" still matches).
-The shop lists only titles currently on sale.
+explicitly. It also saves each product's German blurb (`blurb`), and writes `<output>_products.csv` listing *every* product read, including those without an original title. Author tags are matched tolerantly (a typo such as "Cathy Gillan Thacker" still matches).
+The shop lists only titles currently on sale. The whole-shop run (October 2026) read 14,870
+products: 4,278 stories with an original title (`cora_all.csv`) and 12,385 products without one,
+which step 7a links by character names.
 
 ### Step 4: UNESCO Index Translationum (optional)
 
@@ -212,6 +231,26 @@ python find_translations.py harlequin_lines.csv english_additions.csv --no-libra
   --unmatched unmatched_all.csv --candidates candidate_matches_all.csv
 ```
 
+### Step 7a: Link CORA products without original title (character names)
+
+```bash
+python name_match.py harlequin_lines.csv cora_all_products.csv
+```
+
+Prints the self-test, then writes `name_match_new.csv` (every accepted match with the shared names,
+score and margin, for checking) and `name_match_extra.csv` (extra-source format). Add the latter to
+the matching command:
+
+```bash
+python find_translations.py harlequin_lines.csv english_additions.csv --no-library \
+  --extra harvest_F.csv harvest_G.csv harvest_P.csv cora_all.csv unesco_all.csv name_match_extra.csv \
+  -o translations_all.csv --merged harlequin_lines_with_translations.csv \
+  --unmatched unmatched_all.csv --candidates candidate_matches_all.csv
+```
+
+See [Linking by character names](#linking-by-character-names). Requires the descriptions from
+`scrape_harlequin_lines.py --details`.
+
 ### Step 8: Manual review (optional)
 
 `candidate_matches_all.csv` suggests English books for records that could not be matched
@@ -223,6 +262,19 @@ Review only `high` and `medium`; `low` is mostly noise (see below).
 
 Open `analysis.ipynb`, set `DATA_DIR` in the first code cell, **Restart & Run All**.
 Figures go to `figures/`, derived tables (incl. `alignment_candidates.csv`) to `output/`.
+
+### Step 10: Corpus selection
+
+```bash
+python select_corpus.py --balanced            # 250 books, strict, spread evenly across lines
+python select_corpus.py                       # proportional to availability
+python select_corpus.py -n 300 --level relaxed
+python select_corpus.py --translators         # only books whose translators are all known
+```
+
+Outputs `usable_books.csv` (every book available in all three languages, marked `strict` or
+`relaxed`) and `core_sample.csv` (the sample, with title, year, ISBN, series and translator of one
+edition per language). See [Corpus selection](#corpus-selection).
 
 ---
 
@@ -294,7 +346,7 @@ work ID (`OL999W`).
 | `translators` | Translator(s), "First Last" |
 | `series` | Series/collection and number of the edition (e.g. `Harlequin. Désir 2`, `Bianca 1808`) |
 | `isbn` | ISBN(s) of the edition |
-| `source`, `source_record_id` | DNB / BnF / BN / CORA / UNESCO and the record ID or URL |
+| `source`, `source_record_id` | DNB / BnF / BN / CORA / CORA (name match) / UNESCO and the record ID or URL |
 | `original_title_in_record` | Original title(s) exactly as the source records them |
 | `match_score` | 1.0 exact; 0.88–0.99 variant; `manual` = confirmed in review |
 | `edition_type`, `works_in_edition` | `single` or `anthology`, and the number of works in the volume |
@@ -310,26 +362,140 @@ work ID (`OL999W`).
 | `candidate_matches_all.csv` | Review file (see step 8) |
 | `originals_to_resolve.csv` | English originals not in the input tables, with how many editions point to them |
 | `english_additions.csv` | Originals resolved via Open Library |
+| `cora_all_products.csv` | Every CORA product read, with German blurb and the original titles found (if any) |
+| `name_match_new.csv`, `name_match_test.csv` | Accepted character-name matches; the self-test with every prediction |
+| `usable_books.csv`, `core_sample.csv` | Books in all three languages; the stratified sample |
 | `harvest_*.csv`, `cora_*.csv`, `unesco_all.csv` | Source data in **extra-source format**: `language_letter, authors, original_title, translated_title, pub_date, publisher, place, translators, series, isbn, format, copyright, source, source_record_id, url` (+ optional `original_series, first_edition, first_edition_year`). Any other source converted to this format can be added with `--extra`. |
 
 ---
 
-## Results of the September 2026 run
+## Results of the October 2026 run
 
-First matching pass (step 5, before the Open Library additions and the full CORA run):
+English side: **30,500 books** from twelve FictionDB lines plus **5,364** Harlequin-family
+originals identified through Open Library (**35,864 books**). Sources on the translation side:
+publisher harvest from the three national libraries, the complete CORA shop, the UNESCO sample.
 
 | | French | German | Polish |
 |---|---|---|---|
-| Library records harvested | 24,138 | 21,540 | 6,921 |
-| …naming an English original | 20,328 (84 %) | 4,177 (22 %) | 6,818 (99 %) |
-| Linked editions | 8,490 | 1,884 | 3,532 |
-| English books with ≥ 1 edition | 7,352 (42 %) | 1,583 (9 %) | 3,270 (19 %) |
-| First year with a linked edition | 1978 | 1991 | 1991 |
-| Median years after the original | 1 | 1 | 2 |
-| Translator recorded | 15 % | 74 % | 100 % |
+| **Linked editions** | **19,021** | **5,950** | **6,585** |
+| **English books with ≥ 1 edition** | **16,057** | **4,619** | **6,063** |
+| Translator named (books in all three languages, strict) | 42 % | 84 % | 100 % |
 
-In total **13,906 editions** of **8,779 of 17,446** numbered English books (50 %).
-For comparison, the initial author-by-author approach for American Romance alone found 305 editions.
+In total **31,556 translated editions** of **19,978 English books**. Adding the character-name
+matches (step 7a) raises the German editions to **16,368** (41,974 editions in total) and the
+German books to **8,687**; see [Linking by character names](#linking-by-character-names).
+
+**Books by language combination:**
+
+| Languages | Catalogue + publisher data | + character-name matches |
+|---|---|---|
+| French only | 10,749 | 9,491 |
+| Polish only | 1,866 | 1,533 |
+| German only | 1,646 | 3,260 |
+| French + Polish | 2,744 | 1,881 |
+| French + German | 1,520 | 2,778 |
+| German + Polish | 409 | 742 |
+| **French + German + Polish** | **1,044** | **1,907** |
+| Books with ≥ 1 translation | 19,978 | 21,592 |
+
+Development of the result:
+
+| Stage | Editions | German | In all three languages |
+|---|---|---|---|
+| American Romance, author search | 224 | | |
+| + CORA (author-tagged products), UNESCO | 305 | | |
+| Five lines, publisher harvest (first pass) | 13,906 | | |
+| + originals resolved via Open Library | 28,243 | 3,324 | 634 books |
+| + complete CORA shop | 30,693 | 5,779 | |
+| + seven more FictionDB lines | **31,556** | **5,950** | **1,044 books** |
+| + character-name matches | 41,974 | 16,368 | 1,907 books |
+
+Adding the seven lines changed the total only slightly but replaced about 5,000 Open Library
+records by FictionDB records with exact dates, line, series number and description: the
+originals that had to be resolved via Open Library fell from 16,640 to 11,104
+(5,364 found, 939 not Harlequin, 4,775 not found).
+
+> **How to read coverage.** Books added through Open Library were found *because* a translation
+> points to them, so every one of them has at least one translation. Shares computed over all
+> English books are therefore inflated. For unbiased coverage, use the scraped lines only
+> (`analysis.ipynb`, section 4.8, *coverage by line*).
+
+---
+
+## Linking by character names
+
+Translators rewrite titles, but they almost never rename the characters. `name_match.py` uses this
+to link CORA products whose page gives **no** original title:
+
+1. **English side:** capitalised words in each FictionDB description that are not sentence-initial
+   and not common English words are name candidates. Each gets an IDF weight: *Moustakas* counts
+   far more than *Jack* or *Texas*.
+2. **German side:** anthology blurbs are split into one segment per story (`TITEL von AUTOR …`, or
+   story titles in capitals). German capitalises all nouns, so only words that also occur as names
+   on the English side are used.
+3. **Score** of an English book = sum of the weights of the shared names. If the author is known
+   (from the segment or the product's author tag), only that author's books compete.
+4. A match is accepted if the score is high enough **and** clearly ahead of the second-best book
+   (margin). Thresholds are chosen from the self-test for ≥ 98 % precision.
+
+**Self-test.** CORA products *with* an original title serve as test data (1,428 products,
+2,395 stories). Only products where every story's original is known are used: CORA often names
+fewer originals than an anthology contains, and testing on those marks correct answers as wrong
+(first, flawed run: ≈ 65 % "precision"; manual inspection showed most "errors" were correct).
+
+| Setting | Precision | Coverage |
+|---|---|---|
+| Author known (score ≥ 10, margin ≥ 5) | **98 %** | 78 % |
+| Author known (margin ≥ 8) | 99 % | 67 % |
+| Names only (score ≥ 15, margin ≥ 10) | **98 %** | 30 % |
+
+Typical remaining error: another volume of the same family saga (the Caffarelli or Stathakis
+brothers share a surname and often the setting).
+
+**Result.** Of 12,385 products without an original title, 11,010 story segments in 7,656 products
+were matched (6,401 distinct English books); 10,418 were linked by `find_translations.py`.
+German books rose from 4,619 to 8,687, books in all three languages from 1,044 to 1,907.
+Most of these products are e-books (6,855) or audiobooks (247), only 554 print: they prove that a
+German translation exists, but their date is the shop date, not the first German edition.
+Name matches therefore count only at the *relaxed* level in `select_corpus.py`.
+
+---
+
+## Corpus selection
+
+`select_corpus.py` defines two levels. A book always needs a French, a German **and** a Polish edition.
+
+| Level | Condition per language | English original |
+|---|---|---|
+| **strict** | at least one edition that contains only this novel (no anthology), linked by an exact original title or by hand, from catalogue/publisher data (not from name matching) | from FictionDB (exact date and line) |
+| **relaxed** | any linked edition (anthologies, title variants ≥ 0.88, name matches) | FictionDB or Open Library |
+
+Results:
+
+| | Books in all three languages | All translators named |
+|---|---|---|
+| strict | **383** | 125 |
+| relaxed, catalogue + publisher data | 1,044 | 284 |
+| relaxed, + character-name matches | **1,907** | 284 |
+
+Name matches never name a translator, so the last column does not change.
+
+The sample is stratified by line × decade of the English edition and prefers books with known
+translators. Proportional allocation reflects the market (Harlequin Presents = 58 % of a 250-book
+sample); `--balanced` spreads the sample as evenly across lines as availability allows:
+
+| Line | Proportional | Balanced |
+|---|---|---|
+| Harlequin Presents | 144 | 87 |
+| Silhouette Desire | 50 | 78 |
+| Harlequin Romance | 19 | 28 |
+| Special Edition | 13 | 20 |
+| Harlequin Historical | 8 | 13 |
+| Intimate Moments, Intrigue, Silhouette Romance, Blaze, Superromance, Temptation | 16 | 24 |
+| Published before 2000 | 25 | 36 |
+
+In the balanced sample the smaller lines contribute every strict book they have.
+American Romance has no strict book in all three languages.
 
 ---
 
@@ -340,11 +506,27 @@ For comparison, the initial author-by-author approach for American Romance alone
   (83–100 % before and after). About 1,700 French editions therefore cannot be linked from
   catalogue data; this produces a visible dip for originals from 1983–1986.
 - **German before 1991.** CORA has published Harlequin since the 1970s, but DNB records name
-  the original only from about 1991; the CORA shop lists only current titles. German coverage
-  before 1991 is effectively zero; recent years are over-represented.
+  the original regularly only from about 1991; the CORA shop lists only current titles. German
+  coverage before 1991 is very low; recent years are over-represented.
+- **"Original year" is the North American Harlequin edition** (FictionDB). Titles by British
+  authors appeared first with Mills & Boon, often 1–2 years earlier, and were translated from that
+  edition: 202 editions (FictionDB years) predate "their original" by 1–2 years. These are real;
+  translation lag is slightly underestimated for UK-origin titles.
+- **Open Library years are unreliable.** Its "first published" year is often a later reissue or
+  e-book (e.g. *The Tower of the Captive*, Violet Winspear: 2016). 611 editions of Open Library
+  books appear to predate their original, 329 by 6+ years; the matches themselves are correct.
+  The notebook therefore estimates these books' year as the earlier of the Open Library year and
+  the earliest translation, and excludes them from lag statistics.
 - **Records without an original title** (≈ 15,000 German, mostly magazine-format novels) can only
   be linked by manual review or other sources (e.g. the copyright page of the printed book).
-- **Translators in French records** are rarely catalogued (15 %).
+  For CORA products, character-name matching closes much of this gap (see above).
+- **French minimal records.** Many BnF records of Harlequin paperbacks are dépôt-légal minimal
+  records: title, author, imprint, collection and number, but **neither original title nor
+  translator**. Share of harvested French records naming a translator: 1980s 4 %, 1990s 5 %,
+  **2000s 0 %** (4 of 6,163), 2010s 13 %, 2020s 27 %. Among the 383 strict books, the translator
+  is named for 42 % of French, 84 % of German and 100 % of Polish editions. Missing translators
+  must be taken from the imprint page of the printed book.
+- **CORA original titles in anthologies** are sometimes incomplete (fewer originals than stories).
 - **Transediting.** Translated titles are routinely rewritten and cannot be used to identify the
   original; the pipeline never matches on the translated title.
 - **Share of corpus** is computed against all English books, including 1949–1977 Harlequin
@@ -418,9 +600,15 @@ How the method evolved; useful for understanding design decisions:
 4. **More sources.** CORA shop (German publisher data, translators, first editions) and the UNESCO
    sample → 305 editions.
 5. **Scope.** From one series to five lines (17,452 books), then **translation-first**: harvest
-   all Harlequin translations by publisher and resolve unknown originals via Open Library
-   → 13,906 editions in the first pass.
-6. **Data quality fixes found on real data.** Series records mistaken for books; a Polish-only
+   all Harlequin translations by publisher → 13,906 editions; resolve unknown originals via
+   Open Library (+9,965 English books) → 28,243 editions.
+6. **More German data.** Complete CORA shop (14,870 products) → German editions 3,324 → 5,779;
+   twelve FictionDB lines (30,500 books) → 31,556 editions, 1,044 books in all three languages.
+7. **Character-name matching** for CORA products without original title (98 % precision in the
+   self-test) → 16,368 German editions.
+8. **Corpus selection** (`select_corpus.py`): 383 strict / 1,044 relaxed books in all three
+   languages; 250-book stratified sample.
+9. **Data quality fixes found on real data.** Series records mistaken for books; a Polish-only
    "title / title" rule applied to other libraries; Polish note-label spellings; Polish story
    titles stored as originals; French sub-collections (*Harlequin. Désir 2*).
-7. **Tested and rejected:** linking by series order (see *Negative result*).
+10. **Tested and rejected:** linking by series order (see *Negative result*).
