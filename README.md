@@ -63,6 +63,7 @@ flowchart LR
 | `analysis.ipynb` | Analysis and figures: corpus overview, coverage per language and line, translation lag, publishers, translators, quality checks, shortlist of books available in several languages. |
 | `experiments/explore_dnb_series.py` | Documented **negative result**: shows that the DNB catalogued CORA's newsstand series before 1991 only at series level (see below). |
 | `experiments/anchor_candidates.py` | Documented **negative result**: an attempt to link records without original title via series order (see below). Not part of the pipeline. |
+| `docs/img/` | Figures shown in this README |
 | `requirements.txt`, `.gitignore` | Dependencies; keeps caches and data files out of the repository. |
 
 All scripts must stay in the same folder (they import from `find_translations.py`). Run them from
@@ -395,6 +396,13 @@ In total **31,556 translated editions** of **19,978 English books**. Adding the 
 matches (step 7a) raises the German editions to **16,368** (41,974 editions in total) and the
 German books to **8,687**; see [Linking by character names](#linking-by-character-names).
 
+![English novels by target-language combination, and the path from sampling frame to corpus](docs/img/corpus_frame.png)
+
+*(a) English Harlequin novels by the combination of target languages they were translated into (incl.
+character-name matches). (b) From the sampling frame to the corpus: from 1991 novels translated into
+all three languages; before 1991 (no Polish Harlequin translations) English–French pairs, with German
+editions to be added from the bibliography of the DFG Research Group "Medium – Ware – Werk".*
+
 **Books by language combination:**
 
 | Languages | Catalogue + publisher data | + character-name matches |
@@ -588,6 +596,8 @@ from the linked data. Three findings (DNB, publishers Cora / Harlequin / Mira, O
    American publishers rather than Harlequin category novels (e.g. *Whitney, My Love*). The
    newsstand series Julia, Romana, Bianca, Baccara and Tiffany have **no** individually catalogued
    issue before 1991.
+
+![German Harlequin titles in the DNB catalogue, 1974–2000](docs/img/dnb_german_before_1991.png)
 
 Neither CORA's shop (first-edition statements: none before 1991) nor matching German titles of later
 reissues can close the gap, since the first editions themselves are not recorded. A German strand for
