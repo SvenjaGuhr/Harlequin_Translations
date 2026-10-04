@@ -686,3 +686,8 @@ How the method evolved; useful for understanding design decisions:
    titles stored as originals; French sub-collections (*Harlequin. Désir 2*).
 10. **Tested and rejected:** linking by series order; recovering German translations before 1991 from
     the DNB, which catalogued CORA's newsstand series only at series level (see *Negative results*).
+
+
+## AI-use declaration
+The code was developed with the support of Anthropic's Claude models (Sonnet 4.6 and Opus 5.5).
+Last update: 2026-10-03
