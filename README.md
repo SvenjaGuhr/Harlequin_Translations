@@ -41,7 +41,7 @@ flowchart LR
 8. [Linking by character names](#linking-by-character-names)
 9. [Corpus selection](#corpus-selection)
 10. [Known limitations](#known-limitations)
-11. [Negative result: linking by series order](#negative-result-linking-by-series-order)
+11. [Negative results](#negative-result-german-translations-before-1991): German translations before 1991; linking by series order
 12. [Data sources and responsible use](#data-sources-and-responsible-use)
 13. [Development history](#development-history)
 
@@ -61,8 +61,8 @@ flowchart LR
 | `select_corpus.py` | Filters books available in all three languages (strict / relaxed) and draws a stratified sample for the study, with one edition per language to acquire. |
 | `digitisation_tracker.ipynb` | Turns `core_sample.csv` into `digitisation_tracker.xlsx` (one row per volume, status columns for ordered / received / scanned / OCR checked, progress overview, reserve list), writes shopping lists per language, and explores the sample with figures. Re-running keeps everything entered in the spreadsheet. |
 | `analysis.ipynb` | Analysis and figures: corpus overview, coverage per language and line, translation lag, publishers, translators, quality checks, shortlist of books available in several languages. |
+| `experiments/explore_dnb_series.py` | Documented **negative result**: shows that the DNB catalogued CORA's newsstand series before 1991 only at series level (see below). |
 | `experiments/anchor_candidates.py` | Documented **negative result**: an attempt to link records without original title via series order (see below). Not part of the pipeline. |
-| `docs/img/` | Figures shown in this README |
 | `requirements.txt`, `.gitignore` | Dependencies; keeps caches and data files out of the repository. |
 
 All scripts must stay in the same folder (they import from `find_translations.py`). Run them from
@@ -268,14 +268,14 @@ Figures go to `figures/`, derived tables (incl. `alignment_candidates.csv`) to `
 ### Step 10: Corpus selection
 
 ```bash
-python select_corpus.py --balanced            # 250 books, strict, spread evenly across lines
-python select_corpus.py                       # proportional to availability
+python select_corpus.py                       # 250 books, strict, two periods (split 1991), even by decade and line
+python select_corpus.py --decades proportional --lines proportional   # follow availability
 python select_corpus.py -n 300 --level relaxed
-python select_corpus.py --translators         # only books whose translators are all known
+python select_corpus.py --prefer earliest     # first translations also from 1991 on
+python select_corpus.py --split-year 0        # no split: EN-FR-DE-PL for every book
 ```
 
-Outputs `usable_books.csv` (every book available in all three languages, marked `strict` or
-`relaxed`) and `core_sample.csv` (the sample, with title, year, ISBN, series and translator of one
+Outputs `usable_books.csv` (every usable book with its period, level and languages) and `core_sample.csv` (the sample, with title, year, ISBN, series and translator of one
 edition per language). See [Corpus selection](#corpus-selection).
 
 ### Step 11: Digitisation tracker
@@ -473,63 +473,61 @@ Name matches therefore count only at the *relaxed* level in `select_corpus.py`.
 
 ## Corpus selection
 
-`select_corpus.py` defines two levels. A book always needs a French, a German **and** a Polish edition.
+Harlequin translations into Polish begin only in **1991**, so `select_corpus.py` works with two
+periods, defined by the year of the English edition (default `--split-year 1991`; English editions
+before 1970 are left out, `--min-year`, because the French and German programmes start in the late 1970s):
 
-| Level | Condition per language | English original |
+| Period | Study unit | Requirement |
 |---|---|---|
-| **strict** | at least one edition that contains only this novel (no anthology), linked by an exact original title or by hand, from catalogue/publisher data (not from name matching) | from FictionDB (exact date and line) |
-| **relaxed** | any linked edition (anthologies, title variants ≥ 0.88, name matches) | FictionDB or Open Library |
+| **before 1991** | EN–FR and/or EN–DE | a French and/or German translation published **before 1991** (contemporaneous); books with both are preferred |
+| **from 1991** | EN–FR–DE–PL | a French, a German **and** a Polish translation |
 
-Results:
+The translation date is the edition's publication year, or the first German edition where the
+CORA imprint states it ("Deutsche Erstausgabe … 1987").
 
-| | Books in all three languages | All translators named |
+Two levels of evidence:
+
+| Level | Condition for each required edition | English original |
 |---|---|---|
-| strict | **383** | 125 |
-| relaxed, catalogue + publisher data | 1,044 | 284 |
-| relaxed, + character-name matches | **1,907** | 284 |
+| **strict** | contains only this novel (no anthology), linked by an exact original title or by hand, from catalogue/publisher data (not from name matching) | from FictionDB (exact date and line) |
+| **relaxed** | any linked edition (anthologies, title variants ≥ 0.88, character-name matches) | FictionDB or Open Library |
 
-Name matches never name a translator, so the last column does not change.
+Results (October 2026):
 
-The sample is stratified by line × decade of the English edition and prefers books with known
-translators. Proportional allocation reflects the market (Harlequin Presents = 58 % of a 250-book
-sample); `--balanced` spreads the sample as evenly across lines as availability allows:
-
-| Line | Proportional | Balanced |
+| | Before 1991 (EN–FR / EN–DE) | From 1991 (EN–FR–DE–PL) |
 |---|---|---|
-| Harlequin Presents | 144 | 87 |
-| Silhouette Desire | 50 | 78 |
-| Harlequin Romance | 19 | 28 |
-| Special Edition | 13 | 20 |
-| Harlequin Historical | 8 | 13 |
-| Intimate Moments, Intrigue, Silhouette Romance, Blaze, Superromance, Temptation | 16 | 24 |
-| Published before 2000 | 25 | 36 |
+| **strict** | **1,785** books: FR only 1,778, FR+DE 3, DE only 4 | **363** books (117 with all translators named) |
+| relaxed | 2,221 books: FR only 2,204, FR+DE 4, DE only 13 | 1,860 books (268 with all translators named) |
 
-In the balanced sample the smaller lines contribute every strict book they have.
-American Romance has no strict book in all three languages.
+**German before 1991 is a catalogue gap, not a market gap.** CORA published Harlequin's category
+novels in newsstand series from the 1970s, but the Deutsche Nationalbibliothek catalogued these
+series only at series level, so no individual title before 1991 is recorded (see
+[Negative result: German translations before 1991](#negative-result-german-translations-before-1991)).
+CORA's first-edition statements do not reach back that far either. Only 7 strict German translations
+before 1991 can be linked; the early period is therefore, in the data, an EN–FR period.
 
-![The 250-book balanced sample by line and decade of the English edition](docs/img/sample_line_decade.png)
+**Sample.** The default sample (250 books) is spread evenly across the decades of the English
+edition and, within each decade, across lines; decades or lines with too few books pass their
+surplus on (`--decades proportional`, `--lines proportional` follow availability instead).
+Within each cell, early books with both French and German come first, then books whose
+translators are all named. For early books the earliest edition before 1991 is listed for
+acquisition; for later books a single-novel edition naming its translator (`--prefer earliest`
+for the first translation).
 
-The figures in this section come from `digitisation_tracker.ipynb` (step 11) run on the balanced sample.
+| | Books | Volumes incl. English |
+|---|---|---|
+| before 1991 (EN–FR 105, EN–FR–DE 3) | 108 | 219 |
+| from 1991 (EN–FR–DE–PL) | 142 | 568 |
+| **total** | **250** | **787** |
 
-**Translators.** The Polish national bibliography names the translator of every chosen edition,
-the DNB most; the French records are the gap (see *Known limitations*). Missing names are taken
-from the imprint page during digitisation (column `translator_imprint` in the tracker).
+By decade: 1970s 42, 1980s 42, 1990s 42, 2000s 41, 2010s 42, 2020s 41. By line: Harlequin Presents 78,
+Silhouette Desire 50, Harlequin Romance 40, Silhouette Romance 14, Harlequin Historical 13,
+Special Edition 12, Superromance 9, American Romance, Intrigue, Temptation and Intimate Moments 8 each,
+Blaze 2. 154 books have all translators named; the others are taken from the imprint page during
+digitisation (column `translator_imprint` in the tracker, step 11).
 
-![Translator names known from the catalogues, per language](docs/img/sample_translators.png)
-
-**Which edition was chosen.** For each book and language the sample lists one edition to acquire,
-preferring a single-novel edition that names its translator. That is often a later reissue
-rather than the first translation, especially for German (CORA reprints), so the lag below
-describes the *chosen* editions, not the translation market:
-
-![Years between the English edition and the chosen translation](docs/img/sample_translation_lag.png)
-
-![English publication year against the year of the chosen translation](docs/img/sample_years_scatter.png)
-
-**Availability.** Most books exist in only one edition per language; books with a single edition
-in all three languages are listed in `order_first.csv`.
-
-![Number of editions per book and language](docs/img/sample_editions_per_book.png)
+Figures of the sample (composition, translators, translation lag, editions per book) are produced
+by `digitisation_tracker.ipynb` in `figures_sample/`.
 
 ---
 
@@ -539,9 +537,10 @@ in all three languages are listed in `order_first.csv`.
   (288–528 records per year) but records the original title for only 2–17 % of them
   (83–100 % before and after). About 1,700 French editions therefore cannot be linked from
   catalogue data; this produces a visible dip for originals from 1983–1986.
-- **German before 1991.** CORA has published Harlequin since the 1970s, but DNB records name
-  the original regularly only from about 1991; the CORA shop lists only current titles. German
-  coverage before 1991 is very low; recent years are over-represented.
+- **German before 1991.** CORA's newsstand series (Romana from 1974, Bianca from 1976, Julia from
+  1977, Tiffany, Baccara) are catalogued by the DNB only at series level; not one of their issues before
+  1991 is recorded individually (see the negative result below). The CORA shop lists only current
+  titles, whose first editions are also recent. German coverage before 1991 is therefore close to zero.
 - **"Original year" is the North American Harlequin edition** (FictionDB). Titles by British
   authors appeared first with Mills & Boon, often 1–2 years earlier, and were translated from that
   edition: 202 editions (FictionDB years) predate "their original" by 1–2 years. These are real;
@@ -557,10 +556,9 @@ in all three languages are listed in `order_first.csv`.
 - **French minimal records.** Many BnF records of Harlequin paperbacks are dépôt-légal minimal
   records: title, author, imprint, collection and number, but **neither original title nor
   translator**. Share of harvested French records naming a translator: 1980s 4 %, 1990s 5 %,
-  **2000s 0 %** (4 of 6,163), 2010s 13 %, 2020s 27 %. Among the 383 strict books, the translator
-  is named for 42 % of French, 84 % of German and 100 % of Polish editions. Missing translators
-  must be taken from the imprint page of the printed book (in the balanced sample: French 35 %,
-  German 78 %, Polish 100 % named; see the figure under *Corpus selection*).
+  **2000s 0 %** (4 of 6,163), 2010s 13 %, 2020s 27 %. Among the books strictly attested in all
+  three languages, the translator is named for 42 % of French, 84 % of German and 100 % of Polish editions. Missing translators
+  must be taken from the imprint page of the printed book.
 - **CORA original titles in anthologies** are sometimes incomplete (fewer originals than stories).
 - **Transediting.** Translated titles are routinely rewritten and cannot be used to identify the
   original; the pipeline never matches on the translated title.
@@ -570,6 +568,35 @@ in all three languages are listed in `order_first.csv`.
 - **UNESCO data** is an open sample without authors; matches are title-only and marked as such.
 - **FictionDB list pages** give year only for some early titles and no page counts; use
   `--details` if these fields matter.
+
+---
+
+## Negative result: German translations before 1991
+
+`experiments/explore_dnb_series.py` checked why German translations before 1991 are practically absent
+from the linked data. Three findings (DNB, publishers Cora / Harlequin / Mira, October 2026):
+
+1. **The newsstand series are catalogued as periodicals.** The DNB holds one series record each for
+   Romana (from 1974), Bianca (1976), Julia (1977), Tiffany (1983), Baccara (1984), Historical (1986)
+   and short-lived series such as Denise, Natalie or Love Affair (1,964 series records in total,
+   skipped by the harvest because they do not describe a book).
+2. **Hardly any individual titles before 1991.** The DNB records 10–40 individual CORA books per year
+   in the 1980s, against more than 19,000 from 2001 on.
+3. **A direct search by series name, regardless of publisher,** finds 45 individual CORA titles for
+   1970–1990, all in the two *book-format* series Cora-Bestseller (Nr. 1–33, 1984–1990) and Historical
+   (Bd. 1–19, 1986–1989); 29 name an original title, mostly single titles licensed from other
+   American publishers rather than Harlequin category novels (e.g. *Whitney, My Love*). The
+   newsstand series Julia, Romana, Bianca, Baccara and Tiffany have **no** individually catalogued
+   issue before 1991.
+
+Neither CORA's shop (first-edition statements: none before 1991) nor matching German titles of later
+reissues can close the gap, since the first editions themselves are not recorded. A German strand for
+the 1970s and 1980s needs sources beyond library catalogues: the publisher's licence records, or the
+issues themselves, whose imprints name original and translator.
+
+```bash
+python experiments/explore_dnb_series.py      # writes dnb_series_records.csv, dnb_issue_search.csv
+```
 
 ---
 
@@ -641,9 +668,11 @@ How the method evolved; useful for understanding design decisions:
    twelve FictionDB lines (30,500 books) → 31,556 editions, 1,044 books in all three languages.
 7. **Character-name matching** for CORA products without original title (98 % precision in the
    self-test) → 16,368 German editions.
-8. **Corpus selection** (`select_corpus.py`): 383 strict / 1,044 relaxed books in all three
-   languages; 250-book stratified sample.
+8. **Corpus selection** (`select_corpus.py`): two periods (no Polish Harlequin translations before
+   1991): 1,785 strict EN–FR/EN–DE sources before 1991, 363 strict EN–FR–DE–PL sources from 1991;
+   250-book sample spread evenly across decades (787 volumes).
 9. **Data quality fixes found on real data.** Series records mistaken for books; a Polish-only
    "title / title" rule applied to other libraries; Polish note-label spellings; Polish story
    titles stored as originals; French sub-collections (*Harlequin. Désir 2*).
-10. **Tested and rejected:** linking by series order (see *Negative result*).
+10. **Tested and rejected:** linking by series order; recovering German translations before 1991 from
+    the DNB, which catalogued CORA's newsstand series only at series level (see *Negative results*).
