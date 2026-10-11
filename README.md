@@ -64,7 +64,8 @@ flowchart LR
 | `experiments/explore_dnb_series.py` | Documented **negative result**: shows that the DNB catalogued CORA's newsstand series before 1991 only at series level (see below). |
 | `experiments/anchor_candidates.py` | Documented **negative result**: an attempt to link records without original title via series order (see below). Not part of the pipeline. |
 | `docs/img/` | Figures shown in this README |
-| `requirements.txt`, `.gitignore` | Dependencies; keeps caches and data files out of the repository. |
+| `core_sample_2026-10-02.csv` | **The one data file published here.** Output of `select_corpus.py` from the October 2026 run: the stratified sample of 250 books (book ID, English title, author, line and date, and for each of French, German and Polish one edition with title, year, ISBN, series and translator). It contains bibliographic data from public catalogues only (see [Personal data](#personal-data)). |
+| `requirements.txt`, `.gitignore` | Dependencies; keeps caches, generated tables and spreadsheets out of the repository. The sample file above is the only exception. |
 
 All scripts must stay in the same folder (they import from `find_translations.py`). Run them from
 the folder where you want the data files to be written.
@@ -650,9 +651,17 @@ python experiments/anchor_candidates.py --lang F      # prints the self-test and
 - All scripts pause between requests (`--delay`, default 1–1.5 s), retry politely on errors and
   cache every response so nothing is downloaded twice. Please keep these settings.
 - Check each source's terms of use before large runs and before **redistributing data**. This
-  repository publishes code only; `.gitignore` excludes caches and all generated CSV files.
+  repository publishes code and one data file, the sample `core_sample_2026-10-02.csv`;
+  `.gitignore` excludes caches and all other generated CSV and Excel files.
   Library catalogue data is published under open licences by several of these institutions;
   verify the licence of each source before sharing derived tables.
+
+### Personal data
+
+The tables contain the names of authors and translators as they appear in public library catalogues,
+publisher pages and book imprints, together with titles, years, publishers and ISBNs. These are
+manifestly public bibliographic data, and the pipeline uses them only to identify editions. The
+published sample `core_sample_2026-10-02.csv` contains exactly this kind of data.
 
 ---
 
