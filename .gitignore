@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Project data: generated tables stay out of the repository (they contain names) ---
+*.csv
+*.xlsx
+figures_sample/
+# The one data file published on purpose: the 250-book sample of the October 2026 run
+!core_sample_2026-10-02.csv
